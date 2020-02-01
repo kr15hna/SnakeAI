@@ -17,13 +17,16 @@ from decimal import Decimal
 import random
 import csv
 
+import time
+
+current_milli_time = lambda: int(round(time.time() * 1000))
 
 SQUARE_SIZE = (35, 35)
 
 
 
 class MainWindow(QtWidgets.QMainWindow):
-    def __init__(self, settings, show=True, fps=200):
+    def __init__(self, settings, show=False, fps=200):
         super().__init__()
         self.setAutoFillBackground(True)
         palette = self.palette()
@@ -31,6 +34,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.setPalette(palette)
         self.settings = settings
         self._SBX_eta = self.settings['SBX_eta']
+        self.time_taken_for_gen = current_milli_time()
         self._mutation_bins = np.cumsum([self.settings['probability_gaussian'],
                                         self.settings['probability_random_uniform']
         ])
@@ -63,6 +67,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.left = 150
         self.width = self._snake_widget_width + 700 + self.border[0] + self.border[2]
         self.height = self._snake_widget_height + self.border[1] + self.border[3] + 200
+        self.global_best_score = 0
+        self.best_snake_cout = 0
         
         individuals: List[Individual] = []
 
@@ -87,7 +93,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.timer = QtCore.QTimer(self)
         self.timer.timeout.connect(self.update)
-        self.timer.start(1000./fps)
+        self.timer.start()
 
         if show:
             self.show()
@@ -115,6 +121,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
 
     def update(self) -> None:
+        #print(current_milli_time())
         self.snake_widget_window.update()
         self.nn_viz_window.update()
         # Current individual is alive
@@ -125,10 +132,15 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.ga_window.best_score_label.setText(str(self.snake.score))
         # Current individual is dead         
         else:
+            if self.global_best_score < self.best_score:
+                self.global_best_score = self.best_score
+                self.best_snake_cout += 1
+                save_snake('saves/', 'snake-' + str(self.best_snake_cout) + '-' +  str(self.current_generation), self.snake, settings)
+
             # Calculate fitness of current individual
             self.snake.calculate_fitness()
             fitness = self.snake.fitness
-            print(self._current_individual, fitness)
+            #print(self._current_individual, fitness)
 
             # fieldnames = ['frames', 'score', 'fitness']
             # f = os.path.join(os.getcwd(), 'test_del3_1_0_stats.csv')
@@ -163,6 +175,8 @@ class MainWindow(QtWidgets.QMainWindow):
                 print('----Max fitness:', self.population.fittest_individual.fitness)
                 print('----Best Score:', self.population.fittest_individual.score)
                 print('----Average fitness:', self.population.average_fitness)
+                print('----Time taken:', (current_milli_time() - self.time_taken_for_gen))
+                self.time_taken_for_gen = current_milli_time()
                 self.next_generation()
             else:
                 current_pop = self.settings['num_parents'] if self.current_generation == 0 else self._next_gen_size
